@@ -23,12 +23,23 @@ const sidebar = document.getElementById('sidebar');
 const overlay = document.getElementById('overlay');
 
 // --- SISTEMA DE ROTEAMENTO SPA ---
-function navigateTo(viewId) {
+function navigateTo(viewId, pushHistory = true) {
     views.forEach(view => view.classList.add('hidden'));
-    document.getElementById(`view-${viewId}`).classList.remove('hidden');
+    const targetView = document.getElementById(`view-${viewId}`);
+    if(targetView) targetView.classList.remove('hidden');
+    
     sidebar.classList.remove('open');
     overlay.classList.remove('active');
     
+    // Atualiza a URL do navegador
+    if (pushHistory) {
+        let route = viewId === 'home' ? '/' : `/${viewId}`;
+        // As views 'novel' e 'reader' têm URLs customizadas geradas em suas respectivas funções
+        if (viewId !== 'novel' && viewId !== 'reader') {
+            history.pushState({ viewId }, "", route);
+        }
+    }
+
     if(viewId === 'home') loadHomeNovels();
     if(viewId === 'perfil') loadProfileView();
     if(viewId === 'minhas-novels') loadMinhasNovels();
@@ -36,13 +47,52 @@ function navigateTo(viewId) {
     window.scrollTo(0,0);
 }
 
-// Intercepta links do menu e botões de voltar
+// Escuta os botões Voltar/Avançar do navegador
+window.addEventListener('popstate', (e) => {
+    if (e.state && e.state.viewId) {
+        if (e.state.viewId === 'novel') {
+            openNovel(e.state.novelId, false);
+        } else if (e.state.viewId === 'reader') {
+            openReader(e.state.capId, null, false);
+        } else {
+            navigateTo(e.state.viewId, false);
+        }
+    } else {
+        handleInitialRoute();
+    }
+});
+
+// Identifica a rota quando o site é carregado pela primeira vez
+function handleInitialRoute() {
+    const path = window.location.pathname.replace(/^\/|\/$/g, '');
+    
+    if (!path || path === 'home') {
+        navigateTo('home', false);
+    } else if (['upload-novel', 'minhas-novels', 'perfil', 'public-profile', 'edit-novel', 'upload-chapter'].includes(path)) {
+        navigateTo(path, false);
+    } else if (path.startsWith('capitulo-')) {
+        // Se for um link direto para leitura de capítulo
+        const capId = path.replace('capitulo-', '');
+        openReader(capId, null, false);
+    } else {
+        // Assume que a URL é uma Novel (ex: nome-da-novel-IDDOFIRESTORE)
+        const possibleId = path.split('-').pop(); // O ID do banco fica no final
+        if (possibleId && possibleId.length > 10) { 
+            openNovel(possibleId, false);
+        } else {
+            navigateTo('home', false); // Fallback caso não encontre
+        }
+    }
+}
+
+// Intercepta links do menu e botões de voltar da interface
 document.querySelectorAll('[data-link]').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
         navigateTo(e.currentTarget.getAttribute('data-link'));
     });
 });
+
 // Voltar para novel a partir de upload capítulo e edição
 document.getElementById('back-to-novel-btn').addEventListener('click', () => openNovel(currentNovelId));
 document.getElementById('back-to-novel-from-edit-btn').addEventListener('click', () => openNovel(currentNovelId));
@@ -112,7 +162,9 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById('logout-link').classList.add('hidden');
         authReqEls.forEach(el => el.style.display = 'none');
         profileSummary.classList.add('hidden');
-        navigateTo('home');
+        if(window.location.pathname === '/' || window.location.pathname === '/home'){
+           navigateTo('home', false);
+        }
     }
 });
 
@@ -301,9 +353,9 @@ async function loadMinhasNovels() {
 
 
 // 4. Abrir Detalhes da Novel (Modal de Informações)
-async function openNovel(novelId) {
+async function openNovel(novelId, pushHistory = true) {
     currentNovelId = novelId;
-    navigateTo('novel');
+    navigateTo('novel', false); // Chama sem pushState genérico
     
     const content = document.getElementById('novel-details-content');
     content.innerHTML = '<p>Carregando...</p>';
@@ -315,6 +367,15 @@ async function openNovel(novelId) {
             const data = docSnap.data();
             const isAuthor = currentUser && currentUser.uid === data.autorUID;
             
+            // --- ATUALIZA A URL COM O TÍTULO DA NOVEL E O ID ---
+            if (pushHistory) {
+                const slug = data.titulo.toString().toLowerCase().trim()
+                    .replace(/[\s\W-]+/g, '-') // Formata o título
+                    .replace(/\-$/, ''); // Remove traço final se houver
+                
+                history.pushState({ viewId: 'novel', novelId: novelId }, "", `/${slug}-${novelId}`);
+            }
+
             // Controle de Botões do Autor
             const btnAddChapter = document.getElementById('btn-add-chapter');
             const btnEditNovel = document.getElementById('btn-edit-novel');
@@ -365,7 +426,7 @@ async function openNovel(novelId) {
             document.getElementById('btn-like').addEventListener('click', async () => {
                 if(!currentUser) return alert("Faça login para curtir!");
                 await updateDoc(docRef, { curtidas: (data.curtidas || 0) + 1 });
-                openNovel(novelId); // recarrega tela para atualizar
+                openNovel(novelId, false); // recarrega tela sem alterar histórico
             });
 
             document.getElementById('btn-view-author').addEventListener('click', () => {
@@ -411,7 +472,7 @@ document.getElementById('form-edit-novel').addEventListener('submit', async (e) 
         await updateDoc(doc(db, "lightnovels", currentNovelId), updatedData);
         alert("Light Novel atualizada com sucesso!");
         allNovelsCache = []; // Força limpar cache
-        openNovel(currentNovelId);
+        openNovel(currentNovelId, false); // Redireciona de volta sem poluir histórico
     } catch (err) { alert("Erro ao editar: " + err.message); }
 });
 
@@ -429,7 +490,6 @@ async function openPublicProfile(autorUID) {
     grid.innerHTML = '<p>Buscando obras...</p>';
 
     try {
-        // 1. Busca os dados do usuário (Autor)
         const userSnap = await getDoc(doc(db, "users", autorUID));
         if(userSnap.exists()) {
             const userData = userSnap.data();
@@ -441,7 +501,6 @@ async function openPublicProfile(autorUID) {
             document.getElementById('public-profile-bio').textContent = "Sem informações disponíveis.";
         }
 
-        // 2. Busca as obras publicadas por ele
         const q = query(collection(db, "lightnovels"), where("autorUID", "==", autorUID));
         const novelSnap = await getDocs(q);
         
@@ -462,7 +521,6 @@ async function openPublicProfile(autorUID) {
                     <p><i data-lucide="heart" style="width:12px; height:12px; display:inline-block;"></i> ${data.curtidas || 0}</p>
                 </div>
             `;
-            // Ao clicar numa obra no perfil público, ele abre a novel
             card.addEventListener('click', () => openNovel(doc.id));
             grid.appendChild(card);
         });
@@ -547,21 +605,48 @@ document.getElementById('form-upload-chapter').addEventListener('submit', async 
         await addDoc(collection(db, `lightnovels/${currentNovelId}/capitulos`), capData);
         alert("Capítulo publicado!");
         e.target.reset();
-        openNovel(currentNovelId);
+        openNovel(currentNovelId, false); // Atualiza view
     } catch (e) { alert("Erro: " + e.message); }
 });
 
 
 // --- LEITOR (READER) ---
-function openReader(capId, capData) {
+function openReader(capId, capData = null, pushHistory = true) {
     currentChapterId = capId;
-    navigateTo('reader');
+    navigateTo('reader', false);
+    
+    // Atualiza a URL para o leitor de capítulos
+    if (pushHistory) {
+        history.pushState({ viewId: 'reader', capId: capId }, "", `/capitulo-${capId}`);
+    }
     
     localStorage.setItem(`ln_progress_${currentNovelId}`, capId);
 
-    document.getElementById('reader-title').textContent = `Cap. ${capData.numero}`;
     const content = document.getElementById('reader-content');
     content.style.fontSize = `${fontSize}px`;
+    
+    // Se recebemos os dados já (clique pela lista), carrega. Se não (acesso pelo link direto), busca no banco.
+    if (capData) {
+        renderReaderData(capId, capData);
+    } else {
+        content.innerHTML = '<p style="text-align:center;">Carregando capítulo...</p>';
+        if(!currentNovelId) currentNovelId = localStorage.getItem('last_viewed_novel') || ""; // Tenta puxar fallback
+        
+        getDoc(doc(db, `lightnovels/${currentNovelId}/capitulos`, capId)).then(docSnap => {
+            if (docSnap.exists()) {
+                renderReaderData(capId, docSnap.data());
+            } else {
+                content.innerHTML = '<p style="text-align:center;">Capítulo não encontrado.</p>';
+            }
+        }).catch(e => {
+            content.innerHTML = '<p style="text-align:center;">Erro ao carregar capítulo.</p>';
+        });
+    }
+}
+
+function renderReaderData(capId, capData) {
+    document.getElementById('reader-title').textContent = `Cap. ${capData.numero}`;
+    const content = document.getElementById('reader-content');
     
     const formatText = capData.texto.split('\n').map(p => p.trim() ? `<p style="margin-bottom:20px;">${p}</p>` : '').join('');
     content.innerHTML = `<h2 style="margin-bottom: 30px; text-align:center;">${capData.titulo}</h2>${formatText}`;
@@ -575,13 +660,16 @@ function openReader(capId, capData) {
         btnPrev.onclick = () => openReader(currentChaptersList[currentIndex - 1].id, currentChaptersList[currentIndex - 1]);
     } else { btnPrev.disabled = true; btnPrev.onclick = null; }
 
-    if(currentIndex < currentChaptersList.length - 1) {
+    if(currentIndex !== -1 && currentIndex < currentChaptersList.length - 1) {
         btnNext.disabled = false;
         btnNext.onclick = () => openReader(currentChaptersList[currentIndex + 1].id, currentChaptersList[currentIndex + 1]);
     } else { btnNext.disabled = true; btnNext.onclick = null; }
 }
 
-document.getElementById('reader-back-btn').addEventListener('click', () => openNovel(currentNovelId));
+document.getElementById('reader-back-btn').addEventListener('click', () => {
+    if(currentNovelId) openNovel(currentNovelId);
+    else navigateTo('home');
+});
 
 document.getElementById('btn-font-up').addEventListener('click', () => {
     fontSize += 2;
@@ -607,5 +695,5 @@ document.getElementById('btn-reader-mode').addEventListener('click', () => {
     }
 });
 
-// Iniciar app carregando a Home
-loadHomeNovels();
+// Iniciar app verificando a Rota Atual (em vez de forçar carregamento da Home direto)
+handleInitialRoute();
