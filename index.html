@@ -112,7 +112,13 @@
                 </select>
                 
                 <div class="tags-container" style="margin-bottom: 20px; background: var(--surface-color); padding: 15px; border-radius: 8px;">
-                    <h4>Avisos de Conteúdo</h4>
+                    <h4>Organização</h4>
+                    <div class="toggle-container">
+                        <label for="tag-volumes">Dividir em Volumes?</label>
+                        <input type="checkbox" id="tag-volumes">
+                    </div>
+                    
+                    <h4 style="margin-top: 15px;">Avisos de Conteúdo</h4>
                     <div class="toggle-container">
                         <label for="tag-18">Conteúdo Adulto (+18)</label>
                         <input type="checkbox" id="tag-18">
@@ -149,7 +155,13 @@
                 </select>
                 
                 <div class="tags-container" style="margin-bottom: 20px; background: var(--surface-color); padding: 15px; border-radius: 8px;">
-                    <h4>Avisos de Conteúdo</h4>
+                    <h4>Organização</h4>
+                    <div class="toggle-container">
+                        <label for="edit-tag-volumes">Dividir em Volumes?</label>
+                        <input type="checkbox" id="edit-tag-volumes">
+                    </div>
+
+                    <h4 style="margin-top: 15px;">Avisos de Conteúdo</h4>
                     <div class="toggle-container">
                         <label for="edit-tag-18">Conteúdo Adulto (+18)</label>
                         <input type="checkbox" id="edit-tag-18">
@@ -174,6 +186,11 @@
             <form id="form-upload-chapter">
                 <input type="text" id="chapter-title" placeholder="Título do Capítulo" required>
                 <input type="number" id="chapter-number" placeholder="Número do Capítulo (0 para Oneshot)" required>
+                
+                <div id="chapter-volume-container" style="display: none;">
+                    <input type="number" id="chapter-volume" placeholder="Número do Volume (Ex: 1)" min="1">
+                </div>
+
                 <textarea id="chapter-text" placeholder="Texto do Capítulo..." rows="15" required></textarea>
                 <button type="submit" class="btn-primary">Publicar Capítulo</button>
             </form>
@@ -276,7 +293,7 @@
                 <p style="margin-top: 5px;">Obrigatoriamente, os usuários devem classificar adequadamente suas obras (+18, Gore, Temas Sensíveis). Obras que violem as leis locais ou incitem ódio poderão ser removidas sem aviso prévio.</p>
                 
                 <br>
-                <p style="text-align: center; color: var(--primary-color); font-weight: bold;">Versão 1.2.0</p>
+                <p style="text-align: center; color: var(--primary-color); font-weight: bold;">Versão 1.3.0</p>
             </div>
         </div>
     </div>

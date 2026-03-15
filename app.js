@@ -11,6 +11,7 @@ lucide.createIcons();
 let currentUser = null;
 let userProfile = null;
 let currentNovelId = null;
+let currentNovelData = null; // Guarda os dados da novel aberta para referência rápida
 let currentChapterId = null;
 let currentChaptersList = []; // Para navegação prev/next
 let fontSize = parseInt(localStorage.getItem('ln_fontsize')) || 18;
@@ -34,7 +35,6 @@ function navigateTo(viewId, pushHistory = true) {
     // Atualiza a URL do navegador
     if (pushHistory) {
         let route = viewId === 'home' ? '/' : `/${viewId}`;
-        // As views 'novel' e 'reader' têm URLs customizadas geradas em suas respectivas funções
         if (viewId !== 'novel' && viewId !== 'reader') {
             history.pushState({ viewId }, "", route);
         }
@@ -62,7 +62,6 @@ window.addEventListener('popstate', (e) => {
     }
 });
 
-// Identifica a rota quando o site é carregado pela primeira vez
 function handleInitialRoute() {
     const path = window.location.pathname.replace(/^\/|\/$/g, '');
     
@@ -71,21 +70,18 @@ function handleInitialRoute() {
     } else if (['upload-novel', 'minhas-novels', 'perfil', 'public-profile', 'edit-novel', 'upload-chapter'].includes(path)) {
         navigateTo(path, false);
     } else if (path.startsWith('capitulo-')) {
-        // Se for um link direto para leitura de capítulo
         const capId = path.replace('capitulo-', '');
         openReader(capId, null, false);
     } else {
-        // Assume que a URL é uma Novel (ex: nome-da-novel-IDDOFIRESTORE)
-        const possibleId = path.split('-').pop(); // O ID do banco fica no final
+        const possibleId = path.split('-').pop(); 
         if (possibleId && possibleId.length > 10) { 
             openNovel(possibleId, false);
         } else {
-            navigateTo('home', false); // Fallback caso não encontre
+            navigateTo('home', false); 
         }
     }
 }
 
-// Intercepta links do menu e botões de voltar da interface
 document.querySelectorAll('[data-link]').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -93,10 +89,8 @@ document.querySelectorAll('[data-link]').forEach(btn => {
     });
 });
 
-// Voltar para novel a partir de upload capítulo e edição
 document.getElementById('back-to-novel-btn').addEventListener('click', () => openNovel(currentNovelId));
 document.getElementById('back-to-novel-from-edit-btn').addEventListener('click', () => openNovel(currentNovelId));
-// Voltar do perfil publico
 document.getElementById('back-from-public-profile-btn').addEventListener('click', () => {
     if(currentNovelId) openNovel(currentNovelId);
     else navigateTo('home');
@@ -136,7 +130,6 @@ onAuthStateChanged(auth, async (user) => {
         loginModal.classList.add('hidden');
         profileSummary.classList.remove('hidden');
 
-        // Busca ou Cria Perfil Privado do Usuário Logado
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
         
@@ -168,7 +161,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// Ações de Login
 document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
@@ -181,7 +173,7 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
 });
 document.getElementById('logout-link').addEventListener('click', () => signOut(auth));
 
-// --- MEU PERFIL (EDIÇÃO DE INFORMAÇÕES PESSOAIS) ---
+// --- MEU PERFIL ---
 function loadProfileView() {
     if(!userProfile) return;
     document.getElementById('profile-username').value = userProfile.username;
@@ -204,10 +196,7 @@ document.getElementById('form-profile').addEventListener('submit', async (e) => 
         userProfile.username = newUsername; userProfile.avatarURL = newAvatar; userProfile.bio = newBio;
         document.getElementById('sidebar-username').textContent = newUsername;
         document.getElementById('sidebar-avatar').src = newAvatar;
-        
-        // Atualiza a foto do preview em tempo real
         document.getElementById('profile-avatar-preview').src = newAvatar;
-        
         alert("Perfil atualizado com sucesso!");
     } catch (e) { alert("Erro ao atualizar perfil: " + e.message); }
 });
@@ -219,14 +208,11 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
     } catch (e) { alert("Erro ao enviar e-mail: " + e.message); }
 });
 
-
 // --- BANCO DE DADOS E NAVEGAÇÃO HOME ---
-
 document.getElementById('search-toggle-btn').addEventListener('click', () => {
     document.getElementById('search-bar-container').classList.toggle('hidden');
 });
 
-// 1. Carregar Home e Pesquisa Dinâmica
 async function loadHomeNovels() {
     const grid = document.getElementById('novels-grid');
     grid.innerHTML = '<p style="grid-column: 1/-1; text-align:center;">Carregando...</p>';
@@ -307,7 +293,8 @@ document.getElementById('form-upload-novel').addEventListener('submit', async (e
         capaURL: document.getElementById('novel-cover').value,
         genero: document.getElementById('novel-genre').value,
         autorUID: currentUser.uid,
-        autorNome: userProfile.username, // Pega automaticamente do perfil
+        autorNome: userProfile.username,
+        temVolumes: document.getElementById('tag-volumes').checked, // Adicionado Volumes
         tags: {
             adult: document.getElementById('tag-18').checked,
             sensible: document.getElementById('tag-sensible').checked,
@@ -321,13 +308,12 @@ document.getElementById('form-upload-novel').addEventListener('submit', async (e
         await addDoc(collection(db, "lightnovels"), novelData);
         alert("Light Novel publicada com sucesso!");
         e.target.reset();
-        allNovelsCache = []; // Limpa cache para forçar reload
+        allNovelsCache = []; 
         navigateTo('home');
     } catch (e) { alert("Erro ao publicar: " + e.message); }
 });
 
-
-// 3. Aba Minhas Novels (Gerenciamento)
+// 3. Aba Minhas Novels
 async function loadMinhasNovels() {
     if(!currentUser) return;
     const grid = document.getElementById('minhas-novels-grid');
@@ -351,11 +337,10 @@ async function loadMinhasNovels() {
     } catch(e) { console.error(e); grid.innerHTML="Erro ao carregar.";}
 }
 
-
-// 4. Abrir Detalhes da Novel (Modal de Informações)
+// 4. Abrir Detalhes da Novel
 async function openNovel(novelId, pushHistory = true) {
     currentNovelId = novelId;
-    navigateTo('novel', false); // Chama sem pushState genérico
+    navigateTo('novel', false); 
     
     const content = document.getElementById('novel-details-content');
     content.innerHTML = '<p>Carregando...</p>';
@@ -365,25 +350,29 @@ async function openNovel(novelId, pushHistory = true) {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
+            currentNovelData = data; // Salva o estado global da novel atual
             const isAuthor = currentUser && currentUser.uid === data.autorUID;
             
-            // --- ATUALIZA A URL COM O TÍTULO DA NOVEL E O ID ---
             if (pushHistory) {
                 const slug = data.titulo.toString().toLowerCase().trim()
-                    .replace(/[\s\W-]+/g, '-') // Formata o título
-                    .replace(/\-$/, ''); // Remove traço final se houver
+                    .replace(/[\s\W-]+/g, '-')
+                    .replace(/\-$/, ''); 
                 
                 history.pushState({ viewId: 'novel', novelId: novelId }, "", `/${slug}-${novelId}`);
             }
 
-            // Controle de Botões do Autor
             const btnAddChapter = document.getElementById('btn-add-chapter');
             const btnEditNovel = document.getElementById('btn-edit-novel');
             
             if(isAuthor) {
                 btnAddChapter.classList.remove('hidden');
                 btnEditNovel.classList.remove('hidden');
-                btnAddChapter.onclick = () => navigateTo('upload-chapter');
+                btnAddChapter.onclick = () => {
+                    // Exibe ou esconde o input de volume baseado na configuração da novel
+                    document.getElementById('chapter-volume-container').style.display = data.temVolumes ? 'block' : 'none';
+                    if(!data.temVolumes) document.getElementById('chapter-volume').value = '';
+                    navigateTo('upload-chapter');
+                };
                 btnEditNovel.onclick = () => openEditNovel(novelId, data);
             } else { 
                 btnAddChapter.classList.add('hidden'); 
@@ -394,6 +383,7 @@ async function openNovel(novelId, pushHistory = true) {
             if(data.tags?.adult) tagsUI += `<span class="alert">+18</span>`;
             if(data.tags?.gore) tagsUI += `<span class="alert">Gore</span>`;
             if(data.tags?.sensible) tagsUI += `<span>Temas Sensíveis</span>`;
+            if(data.temVolumes) tagsUI += `<span>Dividido em Volumes</span>`;
             tagsUI += `</div>`;
 
             content.innerHTML = `
@@ -411,6 +401,9 @@ async function openNovel(novelId, pushHistory = true) {
                             <button id="btn-view-author" class="btn-secondary" style="width:auto; display:flex; align-items:center; gap:5px; margin: 0; padding: 12px;">
                                 <i data-lucide="user" style="width:18px; height:18px;"></i> Ver perfil do autor
                             </button>
+                            <button id="btn-share" class="btn-secondary" style="width:auto; display:flex; align-items:center; gap:5px; margin: 0; padding: 12px;">
+                                <i data-lucide="share-2" style="width:18px; height:18px;"></i> Compartilhar
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -422,15 +415,23 @@ async function openNovel(novelId, pushHistory = true) {
             `;
             lucide.createIcons();
 
-            // Ações dos botões da info
             document.getElementById('btn-like').addEventListener('click', async () => {
                 if(!currentUser) return alert("Faça login para curtir!");
                 await updateDoc(docRef, { curtidas: (data.curtidas || 0) + 1 });
-                openNovel(novelId, false); // recarrega tela sem alterar histórico
+                openNovel(novelId, false); 
             });
 
             document.getElementById('btn-view-author').addEventListener('click', () => {
                 openPublicProfile(data.autorUID);
+            });
+
+            // Botão de Compartilhar
+            document.getElementById('btn-share').addEventListener('click', () => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                    alert("Link copiado para a área de transferência!");
+                }).catch(err => {
+                    alert("Não foi possível copiar o link automaticamente.");
+                });
             });
 
             loadChapters(novelId, isAuthor);
@@ -438,14 +439,14 @@ async function openNovel(novelId, pushHistory = true) {
     } catch (e) { console.error("Erro ao carregar novel", e); }
 }
 
-
-// 5. Editar a Light Novel Completamente
+// 5. Editar Novel
 function openEditNovel(novelId, data) {
     document.getElementById('edit-novel-title').value = data.titulo;
     document.getElementById('edit-novel-synopsis').value = data.sinopse;
     document.getElementById('edit-novel-cover').value = data.capaURL;
     document.getElementById('edit-novel-genre').value = data.genero;
     
+    document.getElementById('edit-tag-volumes').checked = data.temVolumes || false;
     document.getElementById('edit-tag-18').checked = data.tags?.adult || false;
     document.getElementById('edit-tag-sensible').checked = data.tags?.sensible || false;
     document.getElementById('edit-tag-gore').checked = data.tags?.gore || false;
@@ -461,6 +462,7 @@ document.getElementById('form-edit-novel').addEventListener('submit', async (e) 
         sinopse: document.getElementById('edit-novel-synopsis').value,
         capaURL: document.getElementById('edit-novel-cover').value,
         genero: document.getElementById('edit-novel-genre').value,
+        temVolumes: document.getElementById('edit-tag-volumes').checked,
         tags: {
             adult: document.getElementById('edit-tag-18').checked,
             sensible: document.getElementById('edit-tag-sensible').checked,
@@ -471,13 +473,12 @@ document.getElementById('form-edit-novel').addEventListener('submit', async (e) 
     try {
         await updateDoc(doc(db, "lightnovels", currentNovelId), updatedData);
         alert("Light Novel atualizada com sucesso!");
-        allNovelsCache = []; // Força limpar cache
-        openNovel(currentNovelId, false); // Redireciona de volta sem poluir histórico
+        allNovelsCache = []; 
+        openNovel(currentNovelId, false); 
     } catch (err) { alert("Erro ao editar: " + err.message); }
 });
 
-
-// 6. Perfil Público do Autor
+// 6. Perfil Público
 async function openPublicProfile(autorUID) {
     currentViewingAuthorID = autorUID;
     navigateTo('public-profile');
@@ -529,19 +530,18 @@ async function openPublicProfile(autorUID) {
     } catch(err) { console.error(err); grid.innerHTML = "Erro ao buscar informações."; }
 }
 
-
-// 7. Carregar Capítulos da Novel
+// 7. Carregar Capítulos com Suporte a Volumes
 async function loadChapters(novelId, isAuthor) {
     const list = document.getElementById('chapter-list');
     list.innerHTML = '<p>Carregando capítulos...</p>';
     
     try {
+        // Pega todos os capítulos ordenados pelo número
         const q = query(collection(db, `lightnovels/${novelId}/capitulos`), orderBy("numero"));
         const querySnapshot = await getDocs(q);
-        list.innerHTML = '';
-        currentChaptersList = [];
         
-        const ultimoLido = localStorage.getItem(`ln_progress_${novelId}`);
+        list.innerHTML = '';
+        let rawChapters = [];
 
         if(querySnapshot.empty) {
             list.innerHTML = '<p style="color:var(--text-muted)">Nenhum capítulo disponível ainda.</p>';
@@ -549,9 +549,36 @@ async function loadChapters(novelId, isAuthor) {
         }
 
         querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const chapInfo = { id: doc.id, ...data };
-            currentChaptersList.push(chapInfo);
+            rawChapters.push({ id: doc.id, ...doc.data() });
+        });
+
+        const ultimoLido = localStorage.getItem(`ln_progress_${novelId}`);
+
+        // Se a novel suporta volumes, organizamos a array primeiro por Volume e depois por Capítulo
+        if (currentNovelData && currentNovelData.temVolumes) {
+            rawChapters.sort((a, b) => {
+                const volA = a.volume || 0;
+                const volB = b.volume || 0;
+                if (volA === volB) return a.numero - b.numero;
+                return volA - volB;
+            });
+        }
+
+        currentChaptersList = rawChapters; // Salva para o Next/Prev funcionar na ordem certa
+        let currentVolumeRendered = null;
+
+        rawChapters.forEach((data) => {
+            // Renderiza o Cabeçalho do Volume se a novel tiver a opção ativada e o volume mudar
+            if (currentNovelData && currentNovelData.temVolumes) {
+                const capVolume = data.volume || 0;
+                if (capVolume !== currentVolumeRendered) {
+                    currentVolumeRendered = capVolume;
+                    const volHeader = document.createElement('h3');
+                    volHeader.className = 'volume-header';
+                    volHeader.textContent = capVolume === 0 ? 'Extas / Sem Volume' : `Volume ${capVolume}`;
+                    list.appendChild(volHeader);
+                }
+            }
 
             const div = document.createElement('div');
             div.className = 'chapter-item';
@@ -559,14 +586,14 @@ async function loadChapters(novelId, isAuthor) {
             let htmlInner = `<div style="flex:1;"><strong>Capítulo ${data.numero}:</strong> ${data.titulo}</div>`;
             
             if(isAuthor) {
-                htmlInner += `<button class="btn-danger delete-cap-btn" data-id="${doc.id}"><i data-lucide="trash-2"></i></button>`;
+                htmlInner += `<button class="btn-danger delete-cap-btn" data-id="${data.id}"><i data-lucide="trash-2"></i></button>`;
             }
 
             div.innerHTML = htmlInner;
-            if(ultimoLido === doc.id) div.style.borderLeftColor = "var(--primary-color)";
+            if(ultimoLido === data.id) div.style.borderLeftColor = "var(--primary-color)";
             
             div.addEventListener('click', (e) => {
-                if(!e.target.closest('.delete-cap-btn')) openReader(doc.id, data);
+                if(!e.target.closest('.delete-cap-btn')) openReader(data.id, data);
             });
 
             list.appendChild(div);
@@ -590,14 +617,21 @@ async function loadChapters(novelId, isAuthor) {
     } catch(e) { console.error(e); list.innerHTML='<p>Erro ao carregar capítulos</p>'; }
 }
 
-
 // 8. Upload de Capítulo
 document.getElementById('form-upload-chapter').addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    // Verifica se a novel usa volumes para salvar o dado correto
+    let capVolume = 0;
+    if (currentNovelData && currentNovelData.temVolumes) {
+        capVolume = Number(document.getElementById('chapter-volume').value) || 0;
+    }
+
     const capData = {
         titulo: document.getElementById('chapter-title').value,
         numero: Number(document.getElementById('chapter-number').value),
         texto: document.getElementById('chapter-text').value,
+        volume: capVolume,
         createdAt: new Date()
     };
 
@@ -605,17 +639,15 @@ document.getElementById('form-upload-chapter').addEventListener('submit', async 
         await addDoc(collection(db, `lightnovels/${currentNovelId}/capitulos`), capData);
         alert("Capítulo publicado!");
         e.target.reset();
-        openNovel(currentNovelId, false); // Atualiza view
+        openNovel(currentNovelId, false);
     } catch (e) { alert("Erro: " + e.message); }
 });
-
 
 // --- LEITOR (READER) ---
 function openReader(capId, capData = null, pushHistory = true) {
     currentChapterId = capId;
     navigateTo('reader', false);
     
-    // Atualiza a URL para o leitor de capítulos
     if (pushHistory) {
         history.pushState({ viewId: 'reader', capId: capId }, "", `/capitulo-${capId}`);
     }
@@ -625,12 +657,11 @@ function openReader(capId, capData = null, pushHistory = true) {
     const content = document.getElementById('reader-content');
     content.style.fontSize = `${fontSize}px`;
     
-    // Se recebemos os dados já (clique pela lista), carrega. Se não (acesso pelo link direto), busca no banco.
     if (capData) {
         renderReaderData(capId, capData);
     } else {
         content.innerHTML = '<p style="text-align:center;">Carregando capítulo...</p>';
-        if(!currentNovelId) currentNovelId = localStorage.getItem('last_viewed_novel') || ""; // Tenta puxar fallback
+        if(!currentNovelId) currentNovelId = localStorage.getItem('last_viewed_novel') || "";
         
         getDoc(doc(db, `lightnovels/${currentNovelId}/capitulos`, capId)).then(docSnap => {
             if (docSnap.exists()) {
@@ -695,5 +726,4 @@ document.getElementById('btn-reader-mode').addEventListener('click', () => {
     }
 });
 
-// Iniciar app verificando a Rota Atual (em vez de forçar carregamento da Home direto)
 handleInitialRoute();

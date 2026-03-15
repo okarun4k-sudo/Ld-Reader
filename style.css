@@ -144,6 +144,14 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 .novel-tags span { background: #2a2a2a; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; color: var(--text-muted); }
 .novel-tags span.alert { background: rgba(207, 102, 121, 0.2); color: var(--danger-color); border: 1px solid var(--danger-color); }
 
+.volume-header {
+    margin: 25px 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--primary-color);
+    font-size: 1.2rem;
+}
+
 .chapter-item {
     display: flex; justify-content: space-between; align-items: center;
     padding: 15px; background: var(--surface-color);
